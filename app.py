@@ -2,10 +2,9 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# 1. ESTÉTICA PROFESIONAL Y CONFIGURACIÓN
+# 1. CONFIGURACIÓN Y ESTÉTICA PROFESIONAL
 st.set_page_config(page_title="VEN-PRO v50.0 - GESTIÓN INTEGRAL", layout="wide")
 
-# CSS personalizado para fondo crema y letras negras (Legibilidad total)
 st.markdown("""
     <style>
     .stApp { background-color: #fdfaf5 !important; }
@@ -15,131 +14,148 @@ st.markdown("""
         border: 2px solid #000 !important; background-color: #e8e8e8 !important;
         color: black !important; font-weight: bold; border-radius: 10px;
     }
-    .stTabs [data-baseweb="tab"] { color: black !important; font-weight: bold !important; }
+    .stTab { font-weight: bold !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. SISTEMA DE SEGURIDAD Y ACCESO
+# 2. SISTEMA DE ACCESO Y MEMORIA
 if 'auth' not in st.session_state: st.session_state.auth = False
+if 'empresas' not in st.session_state: st.session_state.empresas = []
 
 if not st.session_state.auth:
-    # Botón de Administrador arriba a la derecha
     col_t, col_adm = st.columns([4, 1])
     with col_adm:
-        if st.button("👑 ACCESO ADMIN"): st.toast("Panel de Control Protegido")
+        if st.button("👑 ACCESO ADMIN"): st.toast("Ingrese credenciales de Administrador")
     
     st.markdown("<h1 style='text-align:center;'>📂 SISTEMA CONTABLE VEN-PRO</h1>", unsafe_allow_html=True)
     _, centro, _ = st.columns([1, 1.2, 1])
     with centro:
-        with st.form("login_form"):
-            st.subheader("🔑 Inicio de Sesión Segura")
+        with st.form("login"):
+            st.subheader("🔐 Inicio de Sesión")
             u = st.text_input("USUARIO / RIF:").upper()
             p = st.text_input("CONTRASEÑA:", type="password")
+            st.caption("Admin: ADMIN / Clave: VEN2026")
             if st.form_submit_button("🔓 ENTRAR AL SISTEMA"):
                 if (u == "ADMIN" and p == "VEN2026") or (u == "CLIENTE1" and p == "12345"):
                     st.session_state.auth = True
                     st.session_state.rol = "ADMINISTRADOR" if u == "ADMIN" else "CLIENTE"
                     st.rerun()
-                else: st.error("Acceso denegado. Verifique sus credenciales.")
+                else: st.error("Acceso Inválido")
     st.stop()
 
-# 3. BARRA LATERAL (LUPA DE HISTORIAL Y MENÚ)
+# 3. BARRA LATERAL: CONTROL TOTAL Y LUPA DE HISTORIAL
 with st.sidebar:
     st.title(f"👤 {st.session_state.rol}")
     st.write("---")
+    
+    # SELECCIÓN DE EMPRESA (PARA EL CONTADOR)
+    st.subheader("🏢 EMPRESA ACTIVA")
+    lista_nombres = [e['Nombre'] for e in st.session_state.empresas] if st.session_state.empresas else ["Sin Empresas"]
+    empresa_actual = st.selectbox("Trabajando con:", lista_nombres)
+    
+    st.write("---")
     st.subheader("🔍 LUPA DE HISTORIAL")
-    st.info("Consulta movimientos de meses y años anteriores.")
-    h_mes = st.selectbox("Mes de consulta:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=4)
-    h_anio = st.selectbox("Año de consulta:", [2024, 2025, 2026], index=2)
+    h_mes = st.selectbox("Consultar Mes:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=4)
+    h_anio = st.selectbox("Consultar Año:", [2024, 2025, 2026], index=2)
+    
     st.write("---")
     menu = st.radio("MÓDULOS DEL SISTEMA:", [
+        "🏢 GESTIÓN DE EMPRESAS",
         "📊 DASHBOARD", 
-        "🛒 LIBROS COMPRAS/VENTAS", 
+        "🛒 LIBROS COMPRA/VENTA", 
         "🏛️ ALCALDÍA (GIRARDOT)", 
         "🏢 PARAFISCALES", 
         "📖 LIBRO DIARIO/MAYOR", 
         "📤 SENIAT (XML/TXT)"
     ])
+    
     if st.button("🔴 CERRAR SESIÓN"):
         st.session_state.auth = False
         st.rerun()
 
-# 4. MÓDULOS CON INFORMACIÓN DETALLADA (FULL DATA)
+# 4. EJECUCIÓN DE MÓDULOS (FULL DATA)
 st.title(f"📂 {menu}")
-st.caption(f"Visualizando registros de: {h_mes} {h_anio}")
+st.info(f"Visualizando: **{h_mes} {h_anio}** | Empresa: **{empresa_actual}**")
 
-# LUPA DE BÚSQUEDA GENERAL EN TODOS LOS MÓDULOS
-st.text_input(f"🔍 Lupa: Buscar registro específico en {menu} ({h_mes} {h_anio}):", placeholder="Ej: RIF, Nro Factura, Monto...")
+if menu == "🏢 GESTIÓN DE EMPRESAS":
+    st.header("📝 Registro de Clientes / Empresas")
+    with st.expander("➕ REGISTRAR NUEVA EMPRESA", expanded=True):
+        with st.form("reg_empresa"):
+            c1, c2 = st.columns(2)
+            n_emp = c1.text_input("Nombre de la Empresa / Razón Social:")
+            r_emp = c2.text_input("RIF:")
+            t_emp = st.selectbox("Tipo:", ["Contribuyente Especial", "Ordinario", "Formal"])
+            if st.form_submit_button("💾 GUARDAR EMPRESA"):
+                st.session_state.empresas.append({"Nombre": n_emp, "RIF": r_emp, "Tipo": t_emp})
+                st.success(f"Empresa {n_emp} registrada exitosamente.")
+                st.rerun()
+    
+    st.subheader("📋 Empresas Bajo Gestión")
+    if st.session_state.empresas:
+        st.table(pd.DataFrame(st.session_state.empresas))
+    else:
+        st.warning("No hay empresas registradas aún.")
 
-if menu == "📊 DASHBOARD":
-    st.write("### Resumen Consolidado del Periodo")
+elif menu == "📊 DASHBOARD":
     c1, c2, c3 = st.columns(3)
-    c1.metric("VENTAS TOTALES", "134.092,96 Bs.")
-    c2.metric("COMPRAS TOTALES", "82.410,00 Bs.")
-    c3.metric("IVA POR PAGAR", "8.269,27 Bs.")
+    c1.metric("VENTAS DEL MES", "134.092,96 Bs.")
+    c2.metric("COMPRAS DEL MES", "82.410,00 Bs.")
+    c3.metric("IVA TOTAL", "8.269,27 Bs.")
     st.write("---")
-    st.write("#### 📈 Gráfico de Crecimiento Mensual")
-    st.line_chart([10, 25, 30, 45, 60])
+    st.subheader("🔍 Lupa de Movimientos")
+    st.text_input("Buscar registro específico en el historial de esta empresa:")
 
-elif menu == "🛒 LIBROS COMPRAS/VENTAS":
+elif menu == "🛒 LIBROS COMPRA/VENTA":
     t1, t2 = st.tabs(["🛒 LIBRO DE COMPRAS", "💰 LIBRO DE VENTAS"])
     with t1:
-        st.table(pd.DataFrame([{"Fecha": "02/05", "RIF": "J-300123", "Base Imponible": 10000, "IVA": 1600, "Total": 11600}]))
-        st.file_uploader("📂 Cargar Documentos de Compras (PDF, EXCEL, FOTO)", key="c", accept_multiple_files=True)
+        st.write("### Carga y Control de Compras")
+        st.table(pd.DataFrame([{"Fecha": "02/05", "RIF": "J-300123", "Base": 10000, "IVA": 1600, "Total": 11600}]))
+        st.file_uploader("Subir Facturas/Excel/Fotos de Compras", type=['pdf', 'xlsx', 'jpg', 'png'], key="c", accept_multiple_files=True)
     with t2:
-        st.table(pd.DataFrame([{"Fecha": "05/05", "Cliente": "Público General", "Base Imponible": 50000, "IVA": 8000, "Total": 58000}]))
-        st.file_uploader("📂 Cargar Documentos de Ventas (PDF, EXCEL, FOTO)", key="v", accept_multiple_files=True)
+        st.write("### Carga y Control de Ventas")
+        st.table(pd.DataFrame([{"Fecha": "05/05", "Cliente": "Público", "Base": 50000, "IVA": 8000, "Total": 58000}]))
+        st.file_uploader("Subir Reportes Z/Excel/Fotos de Ventas", type=['pdf', 'xlsx', 'jpg', 'png'], key="v", accept_multiple_files=True)
 
 elif menu == "🏛️ ALCALDÍA (GIRARDOT)":
-    st.info("📍 Municipio Girardot - Maracay, Edo. Aragua")
-    st.write("### Gestión de Tributos Municipales")
+    st.subheader("📍 Tributos Municipales - Girardot (Maracay)")
     st.markdown("""
-    - **IAE/ISAE:** Ingresos brutos de comercios, industrias o servicios.
-    - **Inmuebles Urbanos (Derecho de Frente):** Impuesto sobre propiedad inmobiliaria.
-    - **Impuesto sobre Vehículos:** Tasa anual por propiedad de tracción mecánica.
-    - **Propaganda y Publicidad Comercial:** Vallas, letreros y publicidad en vehículos.
-    - **Espectáculos Públicos y Juegos/Apuestas:** Tasas sobre eventos y azar.
-    - **Tasas Administrativas (ASEO y otros):** Aseo urbano, registros o solicitudes.
+    * **IAE/ISAE:** Impuesto sobre Actividades Económicas (Ingresos Brutos).
+    * **Inmuebles Urbanos:** Derecho de Frente sobre propiedad inmobiliaria.
+    * **Vehículos:** Tasa anual por propiedad de tracción mecánica.
+    * **Propaganda y Publicidad:** Vallas, letreros y publicidad en vehículos.
+    * **Espectáculos Públicos:** Tasas sobre eventos y actividades de azar.
+    * **ASEO (Sateca):** Pagos por servicio de aseo y tasas administrativas.
     """)
-    st.selectbox("Seleccione Tributo a consultar/cargar:", ["IAE/ISAE", "Derecho de Frente", "Vehículos", "Publicidad", "Espectáculos", "ASEO/Sateca"])
-    st.number_input("Monto del Pago (Bs):", min_value=0.0)
-    st.file_uploader("📂 Cargar Solvencia o Comprobante (PDF/Foto)", key="alc")
+    tipo_a = st.selectbox("Seleccione Tributo:", ["IAE", "Derecho de Frente", "Vehículos", "Publicidad", "Espectáculos", "ASEO"])
+    st.number_input(f"Monto a pagar por {tipo_a} (Bs):")
+    st.file_uploader("Cargar Comprobante o Solvencia (PDF/Foto)", type=['pdf', 'jpg', 'png'], key="alc")
 
 elif menu == "🏢 PARAFISCALES":
-    st.write("### Aportes Patronales y Seguridad Social")
+    st.subheader("🏢 Seguridad Social y Aportes Patronales")
     st.markdown("""
-    - **IVSS:** Cobertura de seguridad social para trabajadores y patronos.
-    - **FAOV:** Aporte para vivienda gestionado por el BANAVIH.
-    - **INCES:** Formación técnica y profesional obligatoria.
-    - **Régimen Prestacional de Empleo:** Protección ante pérdida de empleo.
-    - **Nueva Ley de Pensiones (2025):** Aporte gestionado por el SENIAT.
+    * **IVSS:** Cobertura de seguridad social para trabajadores y patronos.
+    * **FAOV:** Aporte para vivienda gestionado por el BANAVIH.
+    * **INCES:** Contribución obligatoria para formación técnica.
+    * **Régimen de Empleo:** Protección ante la pérdida de empleo.
+    * **Ley de Pensiones (2025):** Nuevo aporte de protección social (SENIAT).
     """)
-    st.selectbox("Seleccione Ente:", ["IVSS", "FAOV", "INCES", "Régimen de Empleo", "Ley de Pensiones 2025"])
-    st.file_uploader("📂 Cargar Soporte de Pago o Planilla (PDF/Foto)", key="para")
+    tipo_p = st.selectbox("Seleccione Institución:", ["IVSS", "FAOV", "INCES", "Régimen de Empleo", "Ley de Pensiones"])
+    st.file_uploader(f"Cargar Planilla o Comprobante de {tipo_p}", type=['pdf', 'jpg', 'png'], key="para")
 
 elif menu == "📖 LIBRO DIARIO/MAYOR":
-    t_diario, t_mayor = st.tabs(["📖 LIBRO DIARIO", "📚 LIBRO MAYOR"])
-    with t_diario:
-        st.write("### Asientos Contables del Periodo")
-        st.table(pd.DataFrame([{"Asiento": 1, "Cuenta": "Caja", "Debe": 1000, "Haber": 0}, {"Asiento": 1, "Cuenta": "Ventas", "Debe": 0, "Haber": 1000}]))
-        st.file_uploader("📂 Cargar Folios de Libro Diario (PDF)", key="ld")
-    with t_mayor:
-        st.write("### Movimientos por Cuenta")
-        st.selectbox("Seleccione Cuenta:", ["Banco", "Inventario", "Cuentas por Cobrar", "Capital"])
-        st.file_uploader("📂 Cargar Folios de Libro Mayor (PDF)", key="lm")
+    st.subheader("📒 Libros Legales Digitalizados")
+    st.write("Historial de asientos contables y mayorización.")
+    st.text_input("🔍 Lupa: Buscar cuenta o folio:")
+    st.table(pd.DataFrame([{"Folio": "001", "Cuenta": "Banco", "Debe": 50000, "Haber": 0}]))
+    st.file_uploader("Cargar Folios Escaneados (PDF/Foto)", accept_multiple_files=True, key="lib")
 
 elif menu == "📤 SENIAT (XML/TXT)":
-    st.write("### Generación de Archivos para Portal Fiscal")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("IVA / Retenciones")
-        st.button("📦 GENERAR ARCHIVO XML")
-        st.file_uploader("Subir archivos TXT de compras/ventas", key="xml_up")
-    with col2:
-        st.subheader("ISLR")
-        st.button("📄 GENERAR ARCHIVO TXT")
-        st.file_uploader("Subir planilla de retenciones", key="txt_up")
-
-# PIE DE PÁGINA
-st.write("---")
-st.caption(f"SISTEMA VEN-PRO - © 2026 Maracay, Aragua. Versión de Alta Seguridad.")
+    st.subheader("📤 Generación de Archivos Fiscales")
+    st.info("Prepare sus archivos para el portal fiscal SENIAT.")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.write("**Módulo XML (Retenciones IVA)**")
+        st.button("📦 GENERAR XML")
+    with c2:
+        st.write("**Módulo TXT (Retenciones ISLR)**")
+        st.button("📄 GENERAR TXT")
