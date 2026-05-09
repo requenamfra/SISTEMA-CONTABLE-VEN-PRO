@@ -49,7 +49,7 @@ if not st.session_state.auth:
             a_user = st.text_input("ADMINISTRADOR:")
             a_pass = st.text_input("CLAVE MAESTRA:", type="password", key="a_pass")
             if st.button("ACCESO ADMINISTRADOR"):
-                if a_user == "MARIA" and a_pass == "ADMIN_2026_PRO":
+                if a_user == "MARIA" and a_pass == "ADMIN2026":
                     st.session_state.auth, st.session_state.role = True, "ADMIN"
                     st.rerun()
     st.stop()
