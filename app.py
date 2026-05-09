@@ -61,7 +61,7 @@ with st.sidebar:
     h_anio = st.selectbox("Consultar Año:", [2024, 2025, 2026], index=2)
     st.write("---")
     
-    opciones = ["📊 DASHBOARD", "🏢 GESTIÓN DE 100 EMPRESAS", "🛒 LIBRO DE COMPRAS", "💰 LIBRO DE VENTAS", "📖 DIARIO Y MAYOR", "🏛️ ALCALDÍA", "🏢 PARAFISCALES", "📤 XML / TXT"]
+    opciones = ["📊 DASHBOARD", "🏢 GESTIÓN DE EMPRESAS", "🛒 LIBRO DE COMPRAS", "💰 LIBRO DE VENTAS", "📖 DIARIO Y MAYOR", "🏛️ ALCALDÍA", "🏢 PARAFISCALES", "📤 XML / TXT"]
     if st.session_state.rol == "ADMIN": opciones.insert(1, "👑 PANEL ADMINISTRADOR")
     
     menu = st.radio("MÓDULOS:", opciones)
