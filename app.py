@@ -32,7 +32,7 @@ if not st.session_state.auth:
     st.markdown("<h1 style='text-align:center;'>🔐 SEGURIDAD VEN-PRO</h1>", unsafe_allow_html=True)
     _, col, _ = st.columns([1, 1.5, 1])
     with col:
-        tab_user, tab_admin = st.tabs(["🔑 INGRESO CLIENTE", "👑 PANEL CONTROL MARÍA"])
+        tab_user, tab_admin = st.tabs(["🔑 INGRESO CLIENTE", "👑 PANEL CONTROL ADMINISTRADOR"])
         
         with tab_user:
             u_rif = st.text_input("RIF / USUARIO:").upper()
