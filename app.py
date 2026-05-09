@@ -2,59 +2,59 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 
-# 1. SEGURIDAD DE INTERFAZ Y BLOQUEO DE ACCESOS EXTERNOS
-st.set_page_config(page_title="VEN-PRO v75.0 - MASTER", layout="wide")
+# 1. BLOQUEO DE INTERFAZ Y CONFIGURACIÓN VISUAL
+st.set_page_config(page_title="VEN-PRO v80 - SISTEMA CONTABLE GLOBAL", layout="wide")
+
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .stApp { background-color: #fdfaf5 !important; }
-    h1, h2, h3, p, label, .stMarkdown { color: #000000 !important; font-weight: 800 !important; }
+    h1, h2, h3, p, label, th, td { color: #000000 !important; font-weight: 800 !important; }
     .stButton>button {
         width: 100% !important; border: 2px solid #000 !important; 
         background-color: #e8e8e8 !important; color: black !important; font-weight: bold;
     }
-    .status-vencido { color: #FF0000 !important; font-weight: bold; animation: blinker 1.5s linear infinite; }
+    .status-rojo { color: #FF0000 !important; font-weight: bold; animation: blinker 1.5s linear infinite; }
     @keyframes blinker { 50% { opacity: 0; } }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. BASE DE DATOS MAESTRA (TODO EN CERO PARA VENDER)
+# 2. BASE DE DATOS MAESTRA (VACÍA PARA VENTA)
 if 'auth' not in st.session_state: st.session_state.auth = False
-if 'db_clientes' not in st.session_state: st.session_state.db_clientes = {} 
-if 'db_empresas' not in st.session_state: st.session_state.db_empresas = [] # Para 100+ empresas
-if 'libros_data' not in st.session_state: 
-    st.session_state.libros_data = {"compras": [], "ventas": []}
+if 'db_clientes' not in st.session_state: st.session_state.db_clientes = {}
+if 'db_empresas' not in st.session_state: st.session_state.db_empresas = {}
 
 # 3. PANTALLA DE ACCESO (LOGIN)
 if not st.session_state.auth:
-    st.markdown("<h1 style='text-align:center;'>📂 SISTEMA CONTABLE VEN-PRO v75</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;'>📂 SISTEMA CONTABLE VEN-PRO v80</h1>", unsafe_allow_html=True)
     _, centro, _ = st.columns([1, 1.2, 1])
     with centro:
         with st.form("login"):
-            st.subheader("🔐 Acceso al Sistema")
+            st.subheader("🔐 Acceso Administrador / Suscriptor")
             u = st.text_input("USUARIO / RIF:").upper()
             p = st.text_input("CONTRASEÑA:", type="password")
-            if st.form_submit_button("🔓 ENTRAR"):
-                if u == "ADMIN" and p == "ADMIN2026": # Tu acceso
+            if st.form_submit_button("🔓 ENTRAR AL SISTEMA"):
+                if u == "ADMIN" and p == "VEN2026":
                     st.session_state.auth, st.session_state.rol, st.session_state.user = True, "ADMIN", u
                     st.rerun()
                 elif u in st.session_state.db_clientes and st.session_state.db_clientes[u]["clave"] == p:
                     if st.session_state.db_clientes[u]["estatus"] == "Activo":
                         st.session_state.auth, st.session_state.rol, st.session_state.user = True, "CLIENTE", u
                         st.rerun()
-                    else: st.error("❌ ACCESO BLOQUEADO: Pendiente de Pago Mensual.")
+                    else: st.error("❌ SUSCRIPCIÓN VENCIDA.")
                 else: st.error("❌ Datos incorrectos.")
     st.stop()
 
-# 4. BARRA LATERAL (LUPA Y MENÚ)
+# 4. BARRA LATERAL (LUPA DE HISTORIAL Y MODULOS)
 with st.sidebar:
     st.title(f"👤 {st.session_state.rol}")
     if st.session_state.rol == "CLIENTE":
         venc = datetime.strptime(st.session_state.db_clientes[st.session_state.user]["vencimiento"], "%Y-%m-%d")
-        if (venc - datetime.now()).days <= 5:
-            st.markdown(f"<p class='status-vencido'>⚠️ ADVERTENCIA: SUSCRIPCIÓN VENCE EL {venc.date()}</p>", unsafe_allow_html=True)
+        dias_rest = (venc.date() - date.today()).days
+        if dias_rest <= 5:
+            st.markdown(f"<p class='status-rojo'>⚠️ ADVERTENCIA: {dias_rest} DÍAS PARA VENCER</p>", unsafe_allow_html=True)
     
     st.write("---")
     st.subheader("🔍 LUPA DE HISTORIAL")
@@ -62,98 +62,101 @@ with st.sidebar:
     h_anio = st.selectbox("Año:", [2024, 2025, 2026], index=2)
     st.write("---")
     
-    modulos = ["📊 DASHBOARD", "🏢 REGISTRO DE EMPRESAS (0/100)", "🛒 LIBRO DE COMPRAS", "💰 LIBRO DE VENTAS", "📖 DIARIO Y MAYOR", "🏛️ ALCALDÍA GIRARDOT", "🏢 PARAFISCALES", "📤 SENIAT (XML/TXT)"]
+    modulos = ["📊 DASHBOARD", "🏢 GESTIÓN +100 EMPRESAS", "🛒 LIBRO DE COMPRAS", "💰 LIBRO DE VENTAS", "📖 LIBRO DIARIO", "📚 LIBRO MAYOR", "🏛️ ALCALDÍA GIRARDOT", "🏢 PARAFISCALES", "📤 SENIAT (XML/TXT)"]
     if st.session_state.rol == "ADMIN": modulos.insert(1, "👑 PANEL ADMINISTRADOR")
     
-    menu = st.radio("MENÚ:", modulos)
-    if st.button("🔴 CERRAR SESIÓN"):
+    menu = st.radio("SECCIONES:", modulos)
+    if st.button("🔴 SALIR"):
         st.session_state.auth = False
         st.rerun()
 
-# 5. FUNCIONES DE VACIADO AUTOMÁTICO (IA)
-def vaciar_factura(archivo, tipo):
-    # Simula la extracción de los campos exactos que pediste
+# 5. FUNCIONALIDAD DE VACIADO INTELIGENTE (Bolívares Bs.)
+def leer_factura(archivo):
+    # Simulación de extracción de datos de imagen/PDF para vaciado automático
     return {
-        "Nombre / Razón Social Proveedor": "CONTRIBUYENTE DEMO C.A.",
-        "DESCRICION Y BANCO": "COMPRA DE MERCANCIA - BANCO MERCANTIL",
-        "Factura N°": "000125",
-        "Nº Control": "00-9988",
-        "Nota de Debito": "0", "Nota de Credito": "0", "Factura Afectada": "N/A",
-        "Tipo Transacc": "01-REG",
-        "Total Compras": 1160.00, "Compras Exentas": 0.00, "Base": 1000.00, "%16": 160.00, "Impuesto": 160.00
+        "Nombre / Razón Social": "VENDEDOR EJEMPLO C.A", "Factura N°": "000123", "Nº Control": "00-456",
+        "Total": 1160.00, "Exento": 0.00, "Base": 1000.00, "IVA": 160.00
     }
 
-# 6. DESARROLLO DE MÓDULOS
+# 6. DESARROLLO DE MÓDULOS FULL DATA
 st.title(f"{menu} - {h_mes} {h_anio}")
 
 if menu == "👑 PANEL ADMINISTRADOR":
-    st.subheader("Control de Suscriptores (Venta del Sistema)")
-    with st.expander("➕ REGISTRAR NUEVO CLIENTE (SUSCRIPCIÓN)"):
-        nc = st.text_input("RIF Cliente:")
-        pc = st.text_input("Clave:")
-        fv = st.date_input("Vencimiento:", value=date(2026, 5, 30))
+    st.subheader("Lista de Clientes Suscriptores")
+    with st.expander("➕ REGISTRAR NUEVO CLIENTE (SUSCRIPTOR)"):
+        c1, c2, c3 = st.columns(3)
+        n_u = c1.text_input("RIF Cliente:")
+        n_p = c2.text_input("Clave:")
+        n_f = c3.date_input("Vencimiento:")
         if st.button("Habilitar"):
-            st.session_state.db_clientes[nc] = {"clave": pc, "estatus": "Activo", "vencimiento": str(fv)}
-            st.success("Cliente Registrado.")
-    st.write("### Lista de Clientes Activos")
-    st.table(pd.DataFrame.from_dict(st.session_state.db_clientes, orient='index'))
+            st.session_state.db_clientes[n_u] = {"clave": n_p, "estatus": "Activo", "vencimiento": str(n_f)}
+            st.rerun()
+    
+    if st.session_state.db_clientes:
+        df_adm = pd.DataFrame.from_dict(st.session_state.db_clientes, orient='index').reset_index()
+        st.write("### Suscriptores Activos")
+        st.dataframe(df_adm)
+        bloq = st.selectbox("Bloquear/Activar Usuario:", df_adm['index'])
+        if st.button("Cambiar Estatus"):
+            st.session_state.db_clientes[bloq]["estatus"] = "Inactivo" if st.session_state.db_clientes[bloq]["estatus"] == "Activo" else "Activo"
+            st.rerun()
 
-elif menu == "🏢 REGISTRO DE EMPRESAS (0/100)":
-    st.subheader("Cartera de Empresas (Hasta 100)")
+elif menu == "🏢 GESTIÓN +100 EMPRESAS":
+    st.subheader("Registro de Carteras Contables")
     with st.form("emp"):
-        nom = st.text_input("Nombre de Empresa:")
-        rif = st.text_input("RIF:")
-        if st.form_submit_button("Guardar"):
-            st.session_state.db_empresas.append({"Empresa": nom, "RIF": rif})
-    st.table(pd.DataFrame(st.session_state.db_empresas))
+        n_e = st.text_input("Nombre / Razón Social Empresa:")
+        r_e = st.text_input("R.I.F. Empresa:")
+        if st.form_submit_button("Guardar Empresa"):
+            st.session_state.db_empresas[r_e] = {"Nombre": n_e, "Fecha": str(date.today())}
+    st.write(f"Capacidad: {len(st.session_state.db_empresas)} / 100")
+    st.table(pd.DataFrame.from_dict(st.session_state.db_empresas, orient='index'))
 
 elif menu == "🛒 LIBRO DE COMPRAS":
-    st.subheader("Vaciado de Facturas de Compra")
-    up = st.file_uploader("📥 SUBIR PDF/FOTO FACTURA", type=['pdf', 'png', 'jpg'])
+    st.subheader("Carga y Vaciado de Compras")
+    up = st.file_uploader("📥 SUBIR FACTURA (PDF/FOTO)", type=['pdf', 'png', 'jpg'])
     if up:
-        res = vaciar_factura(up, "compra")
-        st.success("✅ DATOS EXTRAÍDOS")
-        st.session_state.libros_data["compras"].append(res)
+        data = leer_factura(up)
+        st.success("✅ Factura leída. Verifique los montos abajo en la tabla de registro.")
     
-    st.write("### Libro de Compras (Edición Manual y Automática)")
-    cols_compra = ["Nombre / Razón Social Proveedor", "DESCRICION Y BANCO", "Factura N°", "Nº Control", "Nota de Debito", "Nota de Credito", "Factura Afectada", "Tipo Transacc", "Total Compras", "Compras Exentas", "Base", "%16", "Impuesto"]
-    df_c = pd.DataFrame(st.session_state.libros_data["compras"], columns=cols_compra)
-    st.data_editor(df_c, num_rows="dynamic", use_container_width=True)
+    st.write("### Registro de Compras (Carga Manual y Automática)")
+    df_com = pd.DataFrame(columns=["Nombre / Razón Social Proveedor", "DESCRIPCIÓN Y BANCO", "Factura N°", "Nº Control", "Nota de Debito", "Nota de Credito", "Factura Afectada", "Tipo Transacc", "Total Compras", "Compras Exentas", "Base", "%16", "Impuesto"])
+    st.data_editor(df_com, num_rows="dynamic", use_container_width=True)
 
 elif menu == "💰 LIBRO DE VENTAS":
-    st.subheader("Vaciado de Facturas de Venta")
-    upv = st.file_uploader("📥 SUBIR FACTURA DE VENTA", type=['pdf', 'png', 'jpg'])
-    st.write("### Libro de Ventas")
-    cols_venta = ["Nº Op.", "Fecha", "Factura N°", "N° Control", "Nota de Debito", "Nota de Credito", "Factura Afectada", "Nombre / Razón Social Cliente", "R.I.F. N°", "Descripción", "Base", "%", "Impuesto", "Total Ventas"]
-    df_v = pd.DataFrame(columns=cols_venta)
-    st.data_editor(df_v, num_rows="dynamic", use_container_width=True)
+    st.subheader("Carga y Vaciado de Ventas")
+    up = st.file_uploader("📥 SUBIR FACTURA DE VENTA", key="v")
+    st.write("### Registro de Ventas")
+    df_ven = pd.DataFrame(columns=["Nº Op.", "Fecha", "Factura N°", "N° Control", "Nota de Debito", "Nota de Credito", "Factura Afectada", "Nombre / Razón Social Cliente", "R.I.F. N°", "Descripción", "Total Ventas", "Ventas Exentas", "Base", "%", "Impuesto"])
+    st.data_editor(df_ven, num_rows="dynamic", use_container_width=True)
 
-elif menu == "📖 DIARIO Y MAYOR":
-    st.subheader("Contabilidad General (Diario y Mayor)")
-    st.file_uploader("Subir Excel de Banco / Asientos", type=['xlsx'])
-    st.data_editor(pd.DataFrame([{"Fecha": "08/05/2026", "Cuenta": "CAJA", "Debe": 1000.50, "Haber": 0.00}], columns=["Fecha", "Cuenta", "Debe", "Haber"]), num_rows="dynamic")
+elif menu == "📖 LIBRO DIARIO":
+    st.subheader("Catálogo de Cuentas VEN-NIIF")
+    with st.expander("Ver Naturaleza de Cuentas"):
+        st.write("**Deudoras:** Activos, Gastos, Costos. **Acreedoras:** Pasivos, Patrimonio, Ingresos.")
+    st.data_editor(pd.DataFrame(columns=["Fecha", "Cuenta", "Descripción del Asiento", "Debe (Bs.)", "Haber (Bs.)"]), num_rows="dynamic", use_container_width=True)
 
-elif menu == "🏛️ ALCALDÍA GIRARDOT":
-    st.info("Control de Impuestos Municipales")
-    tipo = st.selectbox("Impuesto:", ["IAE/ISAE", "Inmuebles Urbanos", "Vehículos", "Publicidad", "ASEO (Sateca)"])
-    st.file_uploader(f"Subir Comprobante de {tipo}")
-    st.data_editor(pd.DataFrame(columns=["Fecha", "Tributo", "Monto Bs.", "Referencia"]), num_rows="dynamic")
+elif menu == "📚 LIBRO MAYOR":
+    st.subheader("Auxiliar de Cuentas")
+    cta = st.selectbox("Seleccione Cuenta:", ["Caja Chica", "Bancos", "IVA Crédito", "Ventas", "Cuentas por Pagar"])
+    st.table(pd.DataFrame(columns=["Fecha", "Explicación", "Debe", "Haber", "Saldo"]))
 
 elif menu == "🏢 PARAFISCALES":
-    st.info("Control Parafiscal (IVSS, FAOV, INCES, Empleo, Pensiones 2025)")
-    inst = st.selectbox("Institución:", ["IVSS", "FAOV", "INCES", "Régimen Empleo", "Ley Pensiones 2025"])
-    st.file_uploader(f"Subir Pago de {inst}")
-    st.data_editor(pd.DataFrame(columns=["Institución", "Mes Pagado", "Monto Bs.", "Estatus"]), num_rows="dynamic")
+    inst = st.selectbox("Institución:", ["IVSS", "FAOV (BANAVIH)", "INCES", "Régimen Empleo", "Nueva Ley de Pensiones (2025)"])
+    st.file_uploader(f"Cargar Comprobante de {inst}")
+    st.data_editor(pd.DataFrame(columns=["Mes", "Institución", "Monto Pagado", "Referencia"]), num_rows="dynamic")
 
-elif menu == "📤 SENIAT (XML/TXT)":
-    st.subheader("Generación Fiscal")
-    st.file_uploader("Subir Retenciones anteriores")
-    st.button("📦 GENERAR XML IVA")
-    st.button("📄 GENERAR TXT ISLR")
+elif menu == "🏛️ ALCALDÍA GIRARDOT":
+    st.info("Municipio Girardot, Maracay - Aragua")
+    trib = st.selectbox("Tributo:", ["IAE/ISAE", "Inmuebles Urbanos", "Vehículos", "Publicidad", "ASEO (Sateca)"])
+    st.file_uploader(f"Cargar Pago de {trib}")
+    st.data_editor(pd.DataFrame(columns=["Fecha", "Tributo", "Monto Bs.", "Estatus"]), num_rows="dynamic")
 
 elif menu == "📊 DASHBOARD":
-    st.subheader("Resumen General de Operaciones")
+    st.subheader("Resumen General Contable")
     c1, c2, c3 = st.columns(3)
-    c1.metric("TOTAL VENTAS", "0,00 Bs.")
-    c2.metric("TOTAL COMPRAS", "0,00 Bs.")
+    c1.metric("VENTAS TOTALES", "0,00 Bs.")
+    c2.metric("COMPRAS TOTALES", "0,00 Bs.")
     c3.metric("IVA POR PAGAR", "0,00 Bs.")
+    st.write("---")
+    st.write("### Estado de Solvencias Municipales y Parafiscales")
+    st.info("No hay deudas pendientes en este periodo.")
