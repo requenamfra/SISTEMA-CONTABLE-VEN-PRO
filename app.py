@@ -1,172 +1,125 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 
-# 1. CONFIGURACIÓN Y ESTÉTICA PREMIUM
-st.set_page_config(page_title="VEN-PRO v50.0 - SISTEMA INTEGRAL", layout="wide")
+# 1. SEGURIDAD DE INTERFAZ (BLOQUEO DE MENÚS EXTERNOS)
+st.set_page_config(page_title="VEN-PRO v60.0 GLOBAL", layout="wide", initial_sidebar_state="expanded")
+
 st.markdown("""
     <style>
+    /* Ocultar botón de Share, GitHub y Menú de Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     .stApp { background-color: #fdfaf5 !important; }
-    h1, h2, h3, p, span, label, .stMarkdown, .stMetric { color: #000000 !important; font-weight: 800 !important; }
+    h1, h2, h3, p, label { color: #000000 !important; font-weight: 800 !important; }
     .stButton>button {
-        width: 100% !important; height: 3em !important;
-        border: 2px solid #000 !important; background-color: #e8e8e8 !important;
-        color: black !important; font-weight: bold; border-radius: 10px;
+        width: 100% !important; border: 2px solid #000 !important; 
+        background-color: #e8e8e8 !important; color: black !important; font-weight: bold;
     }
-    .css-1kyx60p { background-color: #eeeeee !important; border-radius: 15px; padding: 20px; border: 1px solid #000; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. GESTIÓN DE ESTADO (MEMORIA DEL SISTEMA)
+# 2. SISTEMA DE GESTIÓN DE DATOS (EMPRESAS Y PAGOS)
 if 'auth' not in st.session_state: st.session_state.auth = False
-if 'empresas' not in st.session_state: st.session_state.empresas = []
+if 'rol' not in st.session_state: st.session_state.rol = None
+if 'empresas' not in st.session_state: 
+    # Simulación de base de datos para +90 empresas
+    st.session_state.empresas = {f"EMPRESA_{i}": {"RIF": f"J-{10000000+i}-0", "Estatus": "Activo"} for i in range(1, 91)}
+if 'clientes_pago' not in st.session_state:
+    st.session_state.clientes_pago = {"CLIENTE1": "PAGADO", "CLIENTE2": "DEUDOR"}
 
-# 3. PANTALLA DE ACCESO (LOGIN)
+# 3. PANTALLA DE ACCESO BLINDADA
 if not st.session_state.auth:
-    st.markdown("<h1 style='text-align:center;'>📂 SISTEMA CONTABLE VEN-PRO</h1>", unsafe_allow_html=True)
-    _, centro, _ = st.columns([1, 1.2, 1])
-    with centro:
-        with st.form("login_form"):
-            st.subheader("🔐 Control de Acceso")
-            u = st.text_input("USUARIO / RIF:").upper()
-            p = st.text_input("CONTRASEÑA:", type="password")
-            st.write("---")
-            st.caption("ADMINISTRADOR: Ingrese credenciales maestras.")
-            if st.form_submit_button("🔓 ACCEDER AL SISTEMA"):
-                if (u == "ADMIN" and p == "VEN2026") or (u == "CLIENTE1" and p == "12345"):
-                    st.session_state.auth = True
-                    st.session_state.rol = "ADMINISTRADOR" if u == "ADMIN" else "CLIENTE"
+    st.markdown("<h1 style='text-align:center;'>📂 SISTEMA CONTABLE VEN-PRO PRO</h1>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+    with col2:
+        with st.form("login"):
+            st.subheader("🔐 Ingreso Protegido")
+            user = st.text_input("USUARIO / RIF:").upper()
+            password = st.text_input("CONTRASEÑA:", type="password")
+            acceso = st.form_submit_button("🔓 ENTRAR")
+            
+            if acceso:
+                if user == "ADMIN" and password == "VEN2026":
+                    st.session_state.auth, st.session_state.rol = True, "ADMIN"
                     st.rerun()
-                else: st.error("⚠️ Usuario o Clave incorrectos")
+                elif user in st.session_state.clientes_pago:
+                    if st.session_state.clientes_pago[user] == "PAGADO":
+                        st.session_state.auth, st.session_state.rol = True, "CLIENTE"
+                        st.rerun()
+                    else: st.error("❌ ACCESO BLOQUEADO: Pendiente de Pago Mensual.")
+                else: st.error("❌ Credenciales Inválidas.")
     st.stop()
 
-# 4. BARRA LATERAL (LUPA DE HISTORIAL Y MENÚ)
+# 4. PANEL LATERAL (LUPA DE HISTORIAL Y CONTROL)
 with st.sidebar:
-    st.title(f"👤 {st.session_state.rol}")
+    st.title(f"⭐ {st.session_state.rol}")
     st.write("---")
     st.subheader("🔍 LUPA DE HISTORIAL")
-    h_mes = st.selectbox("Consultar Mes:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=4)
-    h_anio = st.selectbox("Consultar Año:", [2024, 2025, 2026], index=2)
+    h_mes = st.selectbox("Mes:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=4)
+    h_anio = st.selectbox("Año:", [2024, 2025, 2026], index=2)
     st.write("---")
     
-    # Selector de Empresa si hay registradas
-    if st.session_state.empresas:
-        empresa_actual = st.selectbox("🏢 EMPRESA ACTIVA:", st.session_state.empresas)
-    else:
-        st.warning("No hay empresas registradas.")
-        empresa_actual = "Ninguna"
-
-    st.write("---")
-    menu = st.radio("MÓDULOS DEL SISTEMA:", [
-        "📊 DASHBOARD", 
-        "🏢 REGISTRO DE EMPRESAS",
-        "🛒 LIBROS DE COMPRA/VENTA", 
-        "📖 DIARIO Y MAYOR",
-        "🏛️ ALCALDÍA (GIRARDOT)", 
-        "🏢 PARAFISCALES", 
-        "📤 GENERAR XML / TXT"
-    ])
+    opciones = ["📊 DASHBOARD", "🏢 GESTIÓN +90 EMPRESAS", "🛒 LIBROS LEGALES", "🏛️ ALCALDÍA GIRARDOT", "🏢 PARAFISCALES", "📤 SENIAT (XML/TXT)"]
+    if st.session_state.rol == "ADMIN": opciones.insert(1, "👑 PANEL DE COBRANZA")
     
-    if st.button("🔴 CERRAR SESIÓN"):
+    menu = st.radio("MÓDULOS:", opciones)
+    if st.button("🔴 CERRAR SISTEMA"):
         st.session_state.auth = False
         st.rerun()
 
-# 5. DESARROLLO DE MÓDULOS FULL DATA
-st.title(f"{menu}")
-st.caption(f"Visualizando Historial de: {h_mes} {h_anio} | Empresa: {empresa_actual}")
+# 5. CONTENIDO DE MÓDULOS FULL DATA
+st.title(f"{menu} - {h_mes} {h_anio}")
 
-# --- MÓDULO REGISTRO DE EMPRESAS ---
-if menu == "🏢 REGISTRO DE EMPRESAS":
-    st.subheader("📝 Inscripción de Nuevas Entidades")
-    with st.expander("➕ AGREGAR NUEVA EMPRESA", expanded=True):
-        with st.form("reg_empresa"):
-            nombre_e = st.text_input("Nombre o Razón Social:")
-            rif_e = st.text_input("RIF (Ej: J-12345678-9):")
-            tipo_e = st.selectbox("Tipo:", ["Contribuyente Especial", "Ordinario", "Persona Natural"])
-            if st.form_submit_button("💾 REGISTRAR"):
-                if nombre_e and rif_e:
-                    st.session_state.empresas.append(f"{nombre_e} ({rif_e})")
-                    st.success(f"Empresa {nombre_e} registrada con éxito.")
-                    st.rerun()
+if menu == "👑 PANEL DE COBRANZA":
+    st.subheader("Control de Suscripciones Mensuales")
+    for cliente, estado in st.session_state.clientes_pago.items():
+        c1, c2, c3 = st.columns([2, 2, 1])
+        c1.write(f"👤 {cliente}")
+        nuevo_estado = c2.selectbox(f"Estatus {cliente}", ["PAGADO", "DEUDOR"], index=0 if estado=="PAGADO" else 1, key=cliente)
+        st.session_state.clientes_pago[cliente] = nuevo_estado
+        if nuevo_estado == "DEUDOR": c3.warning("BLOQUEADO")
+        else: c3.success("ACTIVO")
+
+elif menu == "🏢 GESTIÓN +90 EMPRESAS":
+    st.subheader("Registro Maestro de Cartera")
+    with st.expander("➕ REGISTRAR NUEVA EMPRESA"):
+        n = st.text_input("Nombre:")
+        r = st.text_input("RIF:")
+        if st.button("Guardar Empresa"):
+            st.session_state.empresas[n] = {"RIF": r, "Estatus": "Activo"}
+            st.success("Registrada.")
     
-    st.write("### Listado de Empresas en Cartera")
-    st.table(st.session_state.empresas)
+    st.write("### Base de Datos de Clientes")
+    df_emp = pd.DataFrame.from_dict(st.session_state.empresas, orient='index')
+    st.dataframe(df_emp, use_container_width=True)
 
-# --- MÓDULO DASHBOARD ---
-elif menu == "📊 DASHBOARD":
-    st.write("### Resumen de Movimientos")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("VENTAS DEL MES", "134.092,96 Bs.")
-    c2.metric("COMPRAS DEL MES", "82.410,00 Bs.")
-    c3.metric("IVA TOTAL", "8.269,27 Bs.")
-    st.write("---")
-    st.subheader("🔍 Lupa Maestra de Movimientos")
-    st.text_input("Buscar factura, RIF o monto en el historial:")
-    st.info("Mostrando datos archivados de periodos anteriores.")
+elif menu == "🛒 LIBROS LEGALES":
+    st.info("Módulo para Libro Diario, Mayor, Compras y Ventas.")
+    st.file_uploader("📥 CARGAR DOCUMENTOS (PDF, EXCEL, FOTOS)", accept_multiple_files=True, help="El sistema extraerá la data automáticamente.")
+    st.subheader("🔍 Historial de Movimientos")
+    st.text_input("Buscar factura o asiento específico:")
+    st.table(pd.DataFrame({"Fecha": ["01/05/26"], "Descripción": ["Venta Mercancía"], "Monto": ["15.000 Bs."]}))
 
-# --- MÓDULO COMPRAS/VENTAS ---
-elif menu == "🛒 LIBROS DE COMPRA/VENTA":
-    t1, t2 = st.tabs(["🛒 LIBRO DE COMPRAS", "💰 LIBRO DE VENTAS"])
-    with t1:
-        st.subheader(f"Registro de Compras - {h_mes}")
-        st.text_input("🔍 Buscar en historial de compras:")
-        st.table(pd.DataFrame([{"Fecha": "02/05", "RIF": "J-300123", "Base": 10000, "IVA": 1600, "Total": 11600}]))
-        st.file_uploader("Cargar Facturas/Excel/Fotos de Compras", key="up_c", accept_multiple_files=True)
-    with t2:
-        st.subheader(f"Registro de Ventas - {h_mes}")
-        st.text_input("🔍 Buscar en historial de ventas:")
-        st.table(pd.DataFrame([{"Fecha": "05/05", "Cliente": "Público", "Base": 50000, "IVA": 8000, "Total": 58000}]))
-        st.file_uploader("Cargar Facturas/Excel/Fotos de Ventas", key="up_v", accept_multiple_files=True)
-
-# --- MÓDULO DIARIO/MAYOR ---
-elif menu == "📖 DIARIO Y MAYOR":
-    st.subheader("Contabilidad General")
-    st.text_input("🔍 Lupa: Buscar cuenta contable o asiento:")
-    st.write("**Asientos del Mes:**")
-    st.table(pd.DataFrame([{"Asiento": "001", "Cuenta": "Caja", "Debe": 5000, "Haber": 0}, {"Asiento": "001", "Cuenta": "Ventas", "Debe": 0, "Haber": 5000}]))
-    st.file_uploader("Cargar Libro Diario/Mayor Digitalizado (PDF/Excel)", key="lib")
-
-# --- MÓDULO ALCALDÍA ---
-elif menu == "🏛️ ALCALDÍA (GIRARDOT)":
-    st.info("📍 Municipio Girardot - Maracay, Edo. Aragua")
+elif menu == "🏛️ ALCALDÍA GIRARDOT":
     st.markdown("""
-    **Información de Tributos Municipales:**
-    * **IAE/ISAE:** Impuesto sobre Actividades Económicas. Recae sobre ingresos brutos de comercios e industrias.
-    * **Inmuebles Urbanos (Derecho de Frente):** Impuesto sobre la propiedad inmobiliaria.
-    * **Vehículos:** Tasa anual por propiedad de tracción mecánica.
-    * **Propaganda y Publicidad:** Vallas, letreros y publicidad en vehículos.
-    * **Espectáculos Públicos:** Tasas sobre eventos y actividades de azar.
-    * **ASEO (Sateca):** Pagos por servicios de aseo urbano y tasas administrativas.
+    - **IAE/ISAE:** Ingresos brutos comerciales.
+    - **Inmuebles (Derecho de Frente):** Propiedad inmobiliaria.
+    - **Vehículos / Publicidad / Espectáculos.**
+    - **ASEO (Sateca):** Tasas de servicio.
     """)
-    st.write("---")
-    st.subheader("🔍 Lupa de Tributos Pagados")
-    st.selectbox("Filtrar por tipo:", ["IAE", "Derecho de Frente", "Vehículos", "Publicidad", "Espectáculos", "ASEO"])
-    st.file_uploader("Cargar Comprobantes de Pago / Solvencias", key="up_alc")
+    st.file_uploader("Cargar Comprobantes Municipales")
 
-# --- MÓDULO PARAFISCALES ---
 elif menu == "🏢 PARAFISCALES":
-    st.subheader("Obligaciones Patronales y Seguridad Social")
     st.markdown("""
-    * **IVSS:** Cobertura de seguridad social para trabajadores y patronos.
-    * **FAOV:** Aporte para garantizar acceso a la vivienda (BANAVIH).
-    * **INCES:** Contribución obligatoria para formación técnica profesional.
-    * **Régimen de Empleo:** Protección del trabajador ante pérdida de empleo.
-    * **Nueva Ley de Pensiones (2025):** Aporte gestionado por el SENIAT para fortalecer pensiones.
+    - **IVSS:** Seguro Social.
+    - **FAOV:** Vivienda (BANAVIH).
+    - **INCES:** Capacitación.
+    - **Empleo / Nueva Ley de Pensiones (2025).**
     """)
-    st.write("---")
-    st.subheader("🔍 Lupa Parafiscal")
-    st.selectbox("Ver Institución:", ["IVSS", "FAOV", "INCES", "Empleo", "Pensiones"])
-    st.file_uploader("Cargar Soportes de Pago (PDF/Foto)", key="up_para")
+    st.file_uploader("Cargar Planillas de Pago")
 
-# --- MÓDULO XML/TXT ---
-elif menu == "📤 GENERAR XML / TXT":
-    st.subheader("Exportación de Archivos Fiscales (SENIAT)")
-    st.write("Generación automática según movimientos cargados.")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.write("**Retenciones de IVA**")
-        st.button("📦 GENERAR XML")
-    with c2:
-        st.write("**Retenciones de ISLR**")
-        st.button("📄 GENERAR TXT")
-    st.file_uploader("Cargar TXT/XML anteriores para consulta", key="up_fiscal")
+elif menu == "📤 SENIAT (XML/TXT)":
+    st.subheader("Generación de Archivos Fiscales")
+    st.button("📦 GENERAR XML RETENCIONES IVA")
+    st.button("📄 GENERAR TXT RETENCIONES ISLR")
