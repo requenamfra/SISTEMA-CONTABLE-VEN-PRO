@@ -25,8 +25,16 @@ def check_hashes(password, hashed_text):
 # --- 2. BASE DE DATOS CON MEMORIA (Sincronizada) ---
 if 'db' not in st.session_state:
     st.session_state.db = {
-        'usuarios': {'admin': {'pass': make_hashes('admin123'), 'rol': 'ADMIN'}},
-        'clientes': {} # Aquí se guardarán los 10,000+ clientes
+        'usuarios': {
+            'admin': {'pass': make_hashes('admin123'), 'rol': 'ADMIN'}
+        },
+        'clientes': {
+            'maria': {
+                'pass': make_hashes('123'), 
+                'vence': datetime.now().date() + timedelta(days=30), 
+                'estado': 'Habilitado'
+            }
+        }
     }
 
 # --- 3. PANTALLA DE INGRESO ---
