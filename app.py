@@ -3,10 +3,10 @@ import pandas as pd
 import hashlib
 from datetime import datetime, timedelta
 
-# --- 1. CONFIGURACIÓN DE PÁGINA Y SEGURIDAD VISUAL ---
+# --- 1. CONFIGURACIÓN E INTERFAZ PRIVADA ---
 st.set_page_config(page_title="OmniContable VE", layout="wide")
 
-# Ocultar menús externos de Streamlit (Botones de arriba y footer)
+# OCULTAR MENÚS DE STREAMLIT (Para que no entren a otros sitios)
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -22,128 +22,85 @@ def make_hashes(password):
 def check_hashes(password, hashed_text):
     return make_hashes(password) == hashed_text
 
-# --- 2. MEMORIA DEL SISTEMA (BASE DE DATOS INTEGRADA) ---
+# --- 2. BASE DE DATOS CON MEMORIA (Sincronizada) ---
 if 'db' not in st.session_state:
     st.session_state.db = {
-        'usuarios': {'admin@omni.com': {'pass': make_hashes('admin123'), 'rol': 'ADMIN', 'rif': 'MASTER'}},
-        'empresas': {}
+        'usuarios': {'admin': {'pass': make_hashes('admin123'), 'rol': 'ADMIN'}},
+        'clientes': {} # Aquí se guardarán los 10,000+ clientes
     }
 
-# --- 3. INTERFAZ DE LOGIN ---
+# --- 3. PANTALLA DE INGRESO ---
 if 'auth' not in st.session_state:
-    st.title("🛡️ OmniContable VE - Acceso Profesional")
+    st.title("🛡️ Acceso OmniContable VE")
     with st.form("login_form"):
-        u = st.text_input("Correo Electrónico")
+        u = st.text_input("Usuario")
         p = st.text_input("Contraseña", type="password")
-        if st.form_submit_button("Ingresar"):
+        if st.form_submit_button("Entrar"):
+            # Verificar en Admin o en Clientes registrados
             if u in st.session_state.db['usuarios'] and check_hashes(p, st.session_state.db['usuarios'][u]['pass']):
-                st.session_state.auth = True
-                st.session_state.user = u
-                st.session_state.rol = st.session_state.db['usuarios'][u]['rol']
-                st.session_state.rif = st.session_state.db['usuarios'][u].get('rif')
+                st.session_state.auth, st.session_state.rol, st.session_state.user = True, 'ADMIN', u
                 st.rerun()
+            elif u in st.session_state.db['clientes'] and check_hashes(p, st.session_state.db['clientes'][u]['pass']):
+                cliente = st.session_state.db['clientes'][u]
+                if cliente['estado'] == "Habilitado":
+                    st.session_state.auth, st.session_state.rol, st.session_state.user = True, 'CLIENTE', u
+                    st.rerun()
+                else:
+                    st.error("Acceso suspendido por falta de pago.")
             else:
-                st.error("Credenciales incorrectas o usuario inexistente.")
+                st.error("Credenciales incorrectas")
     st.stop()
 
-# --- 4. PANEL DE ADMINISTRADOR (CONTROL MAESTRO) ---
+# --- 4. PANEL DE ADMINISTRADOR ---
 if st.session_state.rol == "ADMIN":
     st.title("👑 Consola de Administración Global")
     st.sidebar.button("🚪 Salida Rápida", on_click=lambda: st.session_state.clear())
     
-    tab1, tab2, tab3 = st.tabs(["📊 Listado de Clientes", "🏢 Alta de Empresas", "👤 Usuarios Adicionales"])
+    tab1, tab2, tab3 = st.tabs(["📊 Lista de Clientes", "➕ Registro Nuevo", "👥 Usuarios Adicionales"])
     
     with tab1:
-        st.subheader("Control de Suscripciones y Pagos")
-        if not st.session_state.db['empresas']:
-            st.info("No hay registros. Comience en la pestaña 'Alta de Empresas'.")
+        st.subheader("Control de Suscripciones (Escalable 100k+)")
+        if not st.session_state.db['clientes']:
+            st.info("No hay clientes registrados aún.")
         else:
-            # Lista dinámica para 10,000+ clientes
-            df_data = []
-            for rif, info in st.session_state.db['empresas'].items():
-                df_data.append({
-                    "RIF": rif,
-                    "Empresa": info['nombre'],
-                    "Vencimiento": info['vence'],
-                    "Estado": info['estado']
-                })
-            
-            # Tabla interactiva con botones de acción
-            for rif, info in st.session_state.db['empresas'].items():
-                col1, col2, col3, col4 = st.columns([2, 4, 2, 2])
-                col1.write(f"**{rif}**")
-                col2.write(info['nombre'])
-                
-                # Alerta visual de vencimiento
-                dias_rest = (info['vence'] - datetime.now().date()).days
-                color = "red" if info['estado'] == "Deshabilitado" or dias_rest < 0 else "green"
-                col3.markdown(f":{color}[{info['estado']} ({dias_rest} días)]")
-                
-                # Botón de Habiltar/Deshabilitar
-                label = "🚫 Suspender" if info['estado'] == "Habilitado" else "✅ Activar"
-                if col4.button(label, key=f"pago_{rif}"):
-                    nuevo = "Deshabilitado" if info['estado'] == "Habilitado" else "Habilitado"
-                    st.session_state.db['empresas'][rif]['estado'] = nuevo
+            # Mostrar lista con botones de habilitar/deshabilitar
+            for user, info in st.session_state.db['clientes'].items():
+                col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
+                col1.write(f"**Usuario:** {user}")
+                col2.write(f"**Vence:** {info['vence']}")
+                color = "green" if info['estado'] == "Habilitado" else "red"
+                col3.markdown(f":{color}[{info['estado']}]")
+                if col4.button("Cambiar Estado", key=user):
+                    nuevo_estado = "Deshabilitado" if info['estado'] == "Habilitado" else "Habilitado"
+                    st.session_state.db['clientes'][user]['estado'] = nuevo_estado
                     st.rerun()
 
     with tab2:
-        st.subheader("Registrar Nueva Entidad")
-        with st.form("reg_master"):
-            e_rif = st.text_input("RIF (Ej: J123456789)")
-            e_nom = st.text_input("Razón Social")
-            e_vence = st.date_input("Vencimiento de Suscripción")
-            st.divider()
-            e_mail = st.text_input("Correo del Dueño")
-            e_pass = st.text_input("Clave Inicial", type="password")
-            
-            if st.form_submit_button("Dar de Alta y Sincronizar Login"):
-                # Sincronización inmediata con la memoria de ingreso
-                st.session_state.db['empresas'][e_rif] = {'nombre': e_nom, 'vence': e_vence, 'estado': 'Habilitado'}
-                st.session_state.db['usuarios'][e_mail] = {'pass': make_hashes(e_pass), 'rol': 'CLIENTE', 'rif': e_rif}
-                st.success(f"Empresa {e_nom} registrada. El cliente ya puede ingresar.")
+        with st.form("registro_nuevo"):
+            st.subheader("Crear Credenciales de Cliente")
+            n_user = st.text_input("Definir Usuario")
+            n_pass = st.text_input("Definir Clave", type="password")
+            n_vence = st.date_input("Fecha de Vencimiento", value=datetime.now() + timedelta(days=30))
+            if st.form_submit_button("Guardar y Sincronizar"):
+                st.session_state.db['clientes'][n_user] = {
+                    'pass': make_hashes(n_pass),
+                    'vence': n_vence,
+                    'estado': 'Habilitado'
+                }
+                st.success(f"Cliente {n_user} registrado con éxito.")
                 st.rerun()
 
-    with tab3:
-        st.subheader("Añadir Usuarios Adicionales (Colaboradores)")
-        with st.form("multi_user"):
-            target = st.selectbox("Asignar a Empresa", list(st.session_state.db['empresas'].keys()))
-            u_mail = st.text_input("Correo del nuevo usuario")
-            u_pass = st.text_input("Contraseña", type="password")
-            if st.form_submit_button("Vincular Acceso"):
-                st.session_state.db['usuarios'][u_mail] = {'pass': make_hashes(u_pass), 'rol': 'CLIENTE', 'rif': target}
-                st.success("Acceso compartido habilitado.")
-
-# --- 5. PANEL DE CLIENTE (VISTA OPERATIVA) ---
+# --- 5. PANEL DEL CLIENTE ---
 else:
-    info = st.session_state.db['empresas'].get(st.session_state.rif)
-    
-    # Bloqueo por falta de pago
-    if info['estado'] == "Deshabilitado":
-        st.error("🚫 ACCESO RESTRINGIDO: Su suscripción ha vencido o está suspendida. Contacte al administrador.")
-        st.sidebar.button("Cerrar Sesión", on_click=lambda: st.session_state.clear())
-        st.stop()
-
-    st.title(f"🏢 Panel Contable: {info['nombre']}")
+    info = st.session_state.db['clientes'][st.session_state.user]
+    st.title(f"🏢 Sistema Contable - Usuario: {st.session_state.user}")
     st.sidebar.button("🚪 Salida Rápida", on_click=lambda: st.session_state.clear())
     
-    # Alerta automática 5 días antes
+    # Alerta automática de vencimiento
     dias = (info['vence'] - datetime.now().date()).days
     if 0 <= dias <= 5:
-        st.warning(f"⚠️ AVISO: Su suscripción vence en {dias} días. Evite la suspensión del servicio.")
+        st.warning(f"⚠️ Su suscripción vence en {dias} días. Contacte al administrador.")
 
-    menu = st.sidebar.selectbox("Módulos", ["🔍 Lupa de Historial", "📊 Estados Financieros", "🏛️ Fiscal & SENIAT"])
-
-    if menu == "🔍 Lupa de Historial":
-        st.subheader("🔍 Lupa de Historial (Búsqueda en Big Data)")
-        filtro = st.text_input("Buscar factura por RIF, Número o Concepto...")
-        st.info("Mostrando últimos movimientos de 100,000 registros...")
-        # Aquí irá el motor OCR y búsqueda masiva
-
-    elif menu == "📊 Estados Financieros":
-        tasa = st.number_input("Tasa BCV (Bs/USD)", value=36.50)
-        st.subheader("Ganancias y Pérdidas (VEN-NIIF)")
-        st.table({
-            "Cuenta": ["Ingresos Operativos", "Costos de Ventas", "Gastos Administrativos", "Resultado Neto"],
-            "Bs": [100000, -40000, -20000, 40000],
-            "USD (Ref)": [100000/tasa, -40000/tasa, -20000/tasa, 40000/tasa]
-        })
+    st.write("---")
+    st.subheader("Módulo de Trabajo")
+    # Aquí iría el OCR y la Lupa de Historial
