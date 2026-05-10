@@ -64,19 +64,19 @@ if st.sidebar.button("🚪 Salida Rápida (Cerrar Sesión)"):
     st.session_state.clear()
     st.rerun()
 
-# --- 3. PANEL DE ADMINISTRADOR (CONTROL TOTAL) ---
+# --- 3. PANEL DE ADMINISTRADOR (CONTROL MAESTRO) ---
 if st.session_state.rol == "ADMIN":
     st.title("👑 Consola de Administración Global")
+    st.sidebar.button("🚪 Salida Rápida", on_click=lambda: st.session_state.clear())
     
-    # Aquí creamos las 3 pestañas necesarias
     tab1, tab2, tab3 = st.tabs(["📊 Listado de Clientes", "🏢 Registrar Nueva Empresa", "👤 Usuarios Adicionales"])
     
     with tab1:
         st.subheader("📊 Control de Clientes y Pagos")
         if not st.session_state.db['empresas']:
-            st.info("Aún no has registrado empresas.")
+            st.info("No hay empresas registradas.")
         else:
-            # Encabezados de la tabla
+            # Encabezado de tabla
             h1, h2, h3, h4 = st.columns([2, 3, 2, 2])
             h1.write("**RIF**")
             h2.write("**Empresa**")
@@ -89,41 +89,75 @@ if st.session_state.rol == "ADMIN":
                 c1.write(rif)
                 c2.write(info['nombre'])
                 
-                # Color según estado
+                # Color por estado
                 color = "green" if info['estado'] == "Habilitado" else "red"
                 c3.markdown(f":{color}[{info['estado']}]")
                 
-                # BOTÓN DE CONTROL DE ACCESO
-                label = "🚫 Suspender" if info['estado'] == "Habilitado" else "✅ Activar"
-                if c4.button(label, key=f"pago_{rif}"):
+                # Botón de Suspensión por falta de pago
+                btn_label = "🚫 Suspender" if info['estado'] == "Habilitado" else "✅ Activar"
+                if c4.button(btn_label, key=f"pago_{rif}"):
                     nuevo = "Deshabilitado" if info['estado'] == "Habilitado" else "Habilitado"
                     st.session_state.db['empresas'][rif]['estado'] = nuevo
                     st.rerun()
-               with tab2:
-        with st.form("registro_maestro"):
-            st.subheader("📝 Datos de la Nueva Entidad")
-            # ... (aquí van tus campos de RIF, Nombre, etc.) ...
+
+    with tab2:
+        st.subheader("➕ Alta de Nueva Empresa")
+        with st.form("registro_maestro_final"):
+            e_rif = st.text_input("RIF (Ej: J500773587)")
+            e_nom = st.text_input("Razón Social")
+            e_vence = st.date_input("Vencimiento de Suscripción")
+            st.divider()
+            e_mail = st.text_input("Email del Cliente")
+            e_pass = st.text_input("Contraseña del Cliente", type="password")
             
-            # EL BOTÓN DEBE ESTAR AQUÍ ADENTRO (Identado a la derecha)
+            # El botón ahora está DENTRO del formulario
             if st.form_submit_button("Habilitar Empresa y Cliente"):
-                st.session_state.db['empresas'][e_rif] = {'nombre': e_nom, 'vence': e_vence, 'estado': 'Habilitado'}
-                st.session_state.db['usuarios'][e_mail] = {'pass': make_hashes(e_pass), 'rol': 'CLIENTE', 'rif': e_rif}
-                st.success(f"¡{e_nom} lista!")
-                st.rerun() # Esto actualiza la lista de inmediato
+                # Guardar en memoria
+                st.session_state.db['empresas'][e_rif] = {
+                    'nombre': e_nom, 
+                    'vence': e_vence, 
+                    'estado': 'Habilitado'
+                }
+                st.session_state.db['usuarios'][e_mail] = {
+                    'pass': make_hashes(e_pass), 
+                    'rol': 'CLIENTE', 
+                    'rif': e_rif
+                }
+                st.success(f"✅ ¡{e_nom} registrada!")
+                st.rerun()
+
     with tab3:
-        st.subheader("👤 Vincular Usuarios Extras a Empresa Existente")
-        with st.form("registro_usuario_extra"):
-            target = st.selectbox("Seleccione Empresa Destino", list(st.session_state.db['empresas'].keys()))
-            u_mail = st.text_input("Correo del Usuario Adicional")
+        st.subheader("👤 Usuarios Extras")
+        with st.form("extra_user_form"):
+            target = st.selectbox("Seleccione Empresa", list(st.session_state.db['empresas'].keys()))
+            u_mail = st.text_input("Email Adicional")
             u_pass = st.text_input("Contraseña", type="password")
-            
-            if st.form_submit_button("Habilitar Acceso Adicional"):
+            if st.form_submit_button("Vincular Acceso"):
                 st.session_state.db['usuarios'][u_mail] = {'pass': make_hashes(u_pass), 'rol': 'CLIENTE', 'rif': target}
-                st.success(f"👤 Usuario adicional agregado correctamente.")
+                st.success("Acceso concedido.")
+
+# --- 4. PANEL DE CLIENTE (VISTA LIMITADA) ---
+else:
+    rif_cliente = st.session_state.rif
+    if rif_cliente in st.session_state.db['empresas']:
+        empresa_info = st.session_state.db['empresas'][rif_cliente]
+        
+        # VERIFICACIÓN DE PAGO/ESTADO
+        if empresa_info['estado'] == "Deshabilitado":
+            st.error("🚫 Su acceso ha sido suspendido. Por favor, contacte al administrador.")
+            st.sidebar.button("Cerrar Sesión", on_click=lambda: st.session_state.clear())
+            st.stop() # Bloquea el resto del sistema
+            
+        st.title(f"🏢 {empresa_info['nombre']}")
+        st.sidebar.button("🚪 Salida Rápida", on_click=lambda: st.session_state.clear())
+        st.write("Bienvenido a su Sistema Contable.")
+    else:
+        st.error("Empresa no encontrada.")
+        st.stop()
 
 # --- VISTA CLIENTE ---
 else:
-    rif = st.session_state.rif
+    usuario = st.session_state.usuario
     info = st.session_state.db['empresas'][rif]
     
     # Alerta 5 días antes
