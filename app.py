@@ -1,158 +1,126 @@
 import streamlit as st
 import pandas as pd
-import xml.etree.ElementTree as ET
+import numpy as np
 from datetime import datetime, date
-import uuid
 
-# 1. SEGURIDAD Y PROTOCOLO MULTI-TENANT
+# 1. CONFIGURACIÓN Y SEGURIDAD
 st.set_page_config(page_title="OmniContable VE", layout="wide")
 
-# Estilos: Alerta Roja Ley de Pensiones y Bloqueo de Bordes
-st.markdown("""
-    <style>
-    .reportview-container { background: #f0f2f6; }
-    .alerta-pensiones { background-color: #9b1c1c; color: white; padding: 15px; border-radius: 8px; font-weight: bold; text-align: center; margin-bottom: 20px; }
-    .stMetric { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); }
-    </style>
-    """, unsafe_allow_html=True)
-
-# Inicialización de la "Big Data" (Simulación de base de datos relacional)
 if 'db' not in st.session_state:
     st.session_state.db = {
-        'empresas': {}, # RIF: {nombre, suscripcion, usuarios_activos}
-        'master_data': {}, # RIF: {compras, ventas, diario, mayor, inpc}
-        'logs_seguridad': []
+        'usuarios': {'admin@omni.com': {'pass': 'admin123', 'rol': 'ADMIN'}},
+        'empresas': {}, # RIF: {nombre, suscripcion, usuarios_adicionales: []}
+        'inpc': {'2026-03': 1310.5, '2026-04': 1345.2}, # Tabla BCV
+        'contabilidad': {} # RIF: {diario: DF, mayor: DF, facturas: DF}
     }
 
-# 2. MOTOR DE NORMALIZACIÓN SENIAT (REGLA DE ORO: COMA DECIMAL)
-def normalizar_monto_seniat(monto):
-    """Convierte montos a formato TXT SENIAT: 1250,50 (Sin puntos en miles)"""
-    return f"{monto:.2f}".replace(".", ",")
+# 2. FUNCIONES TÉCNICAS CRÍTICAS (SENIAT)
+def formato_txt_seniat(valor):
+    """Regla de Oro: Coma decimal, sin puntos en miles."""
+    return f"{valor:.2f}".replace(".", ",")
 
-# 3. MÓDULO LEY DE PENSIONES 2025 (CÁLCULO DINÁMICO)
-def calcular_pensiones(base_salarial, alicuota=9.0):
-    return (base_salarial * alicuota) / 100
+def calcular_ajuste_inflacion(valor_historico, mes_inicio, mes_final):
+    factor = st.session_state.db['inpc'][mes_final] / st.session_state.db['inpc'][mes_inicio]
+    return valor_historico * factor
 
-# 4. LÓGICA DE POSTEO INMUTABLE (VEN-NIIF)
-def postear_asiento(rif, cuenta_debe, cuenta_haber, monto, glosa):
-    """Posteo simultáneo en Diario y Mayor. Prohibido borrar según especificación."""
-    asiento_id = str(uuid.uuid4())[:8]
-    fecha = datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-    nuevo_asiento = [
-        {"ID": asiento_id, "Fecha": fecha, "Cuenta": cuenta_debe, "Detalle": glosa, "Debe": monto, "Haber": 0.0},
-        {"ID": asiento_id, "Fecha": fecha, "Cuenta": cuenta_haber, "Detalle": glosa, "Debe": 0.0, "Haber": monto}
-    ]
-    
-    df_asiento = pd.DataFrame(nuevo_asiento)
-    st.session_state.db['master_data'][rif]['diario'] = pd.concat([
-        st.session_state.db['master_data'][rif]['diario'], df_asiento
-    ], ignore_index=True)
-
-# --- INTERFAZ ADMINISTRATIVA ---
-
-if 'auth' not in st.session_state:
-    st.title("🛡️ Acceso OmniContable VE")
-    col1, col2 = st.columns(2)
-    user = col1.text_input("Usuario")
-    clave = col2.text_input("Contraseña", type="password")
-    if st.button("Iniciar Sesión Segura"):
-        if user == "MARIA_ADMIN" and clave == "SISTEMA_2026_PRO":
-            st.session_state.auth = "ADMIN"
-            st.rerun()
+# 3. INTERFAZ DE LOGÍN
+if 'user' not in st.session_state:
+    st.title("🛡️ OmniContable VE - Acceso")
+    with st.form("login"):
+        u = st.text_input("Correo Electrónico")
+        p = st.text_input("Contraseña", type="password")
+        if st.form_submit_button("Ingresar"):
+            if u in st.session_state.db['usuarios'] and st.session_state.db['usuarios'][u]['pass'] == p:
+                st.session_state.user = u
+                st.session_state.rol = st.session_state.db['usuarios'][u]['rol']
+                st.rerun()
     st.stop()
 
-# --- DASHBOARD MAESTRO ---
-
-with st.sidebar:
-    st.header("⚙️ Panel de Control")
-    opcion = st.radio("Módulos", ["Dashboard", "Lupa de Historial", "Fiscal: IVA/Pensiones", "Contabilidad: VEN-NIIF", "Cierre y Ajuste IPC"])
-    if st.button("🚪 Salida Rápida"):
-        del st.session_state.auth
-        st.rerun()
-
-if opcion == "Dashboard":
-    st.title("📊 Dashboard Maestro (10,000+ Empresas)")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Empresas Activas", "10,240", "+12%")
-    c2.metric("Facturas Procesadas", "845,900")
-    c3.metric("Recaudación Estimada (IVA)", "Bs. 4.5M")
-    c4.metric("Alertas de Pago", "24", delta_color="inverse")
+# --- PANEL DE ADMINISTRADOR ---
+if st.session_state.rol == "ADMIN":
+    st.sidebar.title("👑 MODO ADMINISTRADOR")
+    tab_admin = st.tabs(["Gestión de Clientes", "Suscripciones", "Auditoría Global"])
     
-    st.subheader("🚦 Semáforo Fiscal de Entidades")
-    st.table(pd.DataFrame({
-        "Empresa": ["Inversiones Baly's", "TecnoMundo J&R", "Alimentos Aragua"],
-        "RIF": ["J-500773587", "J-304958671", "G-200394850"],
-        "Estado IVA": ["✅ Declarado", "⚠️ Pendiente (2 días)", "❌ Vencido"],
-        "Ley Pensiones": ["✅ Pagado", "✅ Pagado", "⚠️ Pendiente"]
-    }))
+    with tab_admin[0]:
+        st.subheader("Crear Nueva Empresa y Usuarios")
+        with st.form("nueva_empresa"):
+            c1, c2, c3 = st.columns(3)
+            rif = c1.text_input("RIF Empresa (Ej: J500773587)")
+            nom = c2.text_input("Razón Social")
+            plan = c3.selectbox("Plan", ["Básico (1 usuario)", "Pro (5 usuarios)", "Enterprise"])
+            
+            u_cli = st.text_input("Email del Cliente Principal")
+            p_cli = st.text_input("Clave de Acceso")
+            
+            if st.form_submit_button("Registrar Empresa"):
+                st.session_state.db['empresas'][rif] = {'nombre': nom, 'plan': plan, 'vence': '2027-01-01'}
+                st.session_state.db['usuarios'][u_cli] = {'pass': p_cli, 'rol': 'CLIENTE', 'rif': rif}
+                st.success(f"Empresa {nom} creada con éxito.")
 
-elif opcion == "Lupa de Historial":
-    st.title("🔍 Lupa de Historial (Big Data)")
-    st.info("Busque entre los 100,000 registros históricos por RIF o N° de Factura")
-    busqueda = st.text_input("Ingrese RIF o Número de Factura para búsqueda instantánea:")
-    # Simulación de pipeline masivo
-    st.write("Resultados de auditoría inmutable:")
-    st.data_editor(pd.DataFrame(columns=["RIF", "Factura", "Fecha", "Monto Bs.", "Usuario Posteo", "Hash Seguridad"]))
+# --- PANEL DE CLIENTE / CONTADOR ---
+else:
+    rif_actual = st.session_state.db['usuarios'][st.session_state.user]['rif']
+    st.sidebar.title(f"🏢 {st.session_state.db['empresas'][rif_actual]['nombre']}")
+    opcion = st.sidebar.radio("Módulos", ["Dashboard", "Lupa de Historial", "Estado de Resultados", "Ajuste Inflación", "Exportar SENIAT"])
 
-elif opcion == "Fiscal: IVA/Pensiones":
-    st.title("⚖️ Módulo Fiscal y Parafiscal")
-    
-    tab1, tab2, tab3 = st.tabs(["Carga de Facturas (OCR)", "Ley de Pensiones 2025", "Generación TXT/XML"])
-    
-    with tab1:
-        st.subheader("Pipeline de Carga Masiva")
-        up = st.file_uploader("Cargar Lote de Facturas (Máx 100,000)", accept_multiple_files=True)
-        if up:
-            st.success(f"Procesando {len(up)} archivos... Extrayendo datos VEN-NIIF automáticamente.")
-
-    with tab2:
-        st.markdown("<div class='alerta-pensiones'>CÁLCULO LEY DE PENSIONES - ALÍCUOTA 9% (Decreto 2025)</div>", unsafe_allow_html=True)
-        base = st.number_input("Base Salarial Total del Mes (Bs.)", min_value=0.0)
-        aporte = calcular_pensiones(base)
-        st.subheader(f"Total Aporte a Declarar: Bs. {aporte:,.2f}")
+    if opcion == "Lupa de Historial":
+        st.header("🔍 Lupa de Historial (Big Data)")
+        st.info("Buscador de alta velocidad para 100,000+ registros.")
         
-        if st.button("Postear Gasto de Pensión"):
-            st.info("Asiento automático generado: Gasto Personal (Debe) vs Ley Pensiones por Pagar (Haber)")
+        filtro = st.text_input("Buscar por Factura N°, RIF o Proveedor")
+        # Aquí corregimos el error de la imagen anterior (num_rows era el problema)
+        st.data_editor(
+            pd.DataFrame(columns=["Fecha", "Entidad", "Monto Bs.", "N° Planilla", "Estado"]), 
+            num_rows="dynamic",
+            use_container_width=True
+        )
 
-    with tab3:
-        st.subheader("Generación de Archivos SENIAT")
-        col_a, col_b = st.columns(2)
-        if col_a.button("Generar TXT IVA (Coma Decimal)"):
-            # Estructura TXT según regla de oro
-            txt_ejemplo = f"J505802801|202603|15/03/2026|01|004126952|{normalizar_monto_seniat(7240.90)}|{normalizar_monto_seniat(1158.54)}"
-            st.code(txt_ejemplo, language="text")
+    elif opcion == "Estado de Resultados":
+        st.header("📊 Ganancias y Pérdidas (Comparativa Divisas)")
+        tasa = st.number_input("Tasa BCV Referencial (Bs./USD)", value=36.50)
         
-        if col_b.button("Generar XML ISLR"):
-            root = ET.Element("RelacionRetencionesISLR", RifAgente="J505802801", Periodo="202603")
-            det = ET.SubElement(root, "DetalleRetencion")
-            ET.SubElement(det, "RifRetenido").text = "V12345678"
-            ET.SubElement(det, "MontoOperacion").text = "5000,00"
-            st.code(ET.tostring(root, encoding="unicode"), language="xml")
+        # Datos simulados sincronizados
+        data_egp = {
+            'Cuenta': ['Ventas Netas', 'Costos de Venta', 'Gastos de Personal', 'Utilidad'],
+            'Bs.': [150000.00, -80000.00, -20000.00, 50000.00]
+        }
+        df_egp = pd.DataFrame(data_egp)
+        df_egp['USD (Equiv.)'] = df_egp['Bs.'] / tasa
+        
+        st.table(df_egp.style.format({'Bs.': '{:,.2f}', 'USD (Equiv.)': '{:,.2f}'}))
 
-elif opcion == "Contabilidad: VEN-NIIF":
-    st.title("📖 Estados Financieros Unificados")
-    st.subheader("Estado de Ganancias y Pérdidas (Comparativo Divisas)")
-    
-    egp = pd.DataFrame({
-        "Cuenta": ["Ventas Netas", "Costo de Ventas", "Gastos Administrativos", "Utilidad Neta"],
-        "Bs. (Histórico)": [500000.00, -200000.00, -50000.00, 250000.00],
-        "USD (Ref. 36.50)": [13698.63, -5479.45, -1369.86, 6849.31]
-    })
-    st.table(egp)
-    
-    st.subheader("Balance General (Situación Financiera)")
-    st.write("Patrimonio Actualizado Post-Cierre:")
-    st.metric("Patrimonio Total", "Bs. 1,240,500.00", "Resultados Acumulados")
+    elif opcion == "Ajuste Inflación":
+        st.header("📈 Ajuste por Inflación Fiscal (V-NIIF)")
+        st.write("Cálculo basado en variaciones del INPC")
+        val_h = st.number_input("Valor Histórico del Activo (Bs.)", value=1000.0)
+        mes_i = st.selectbox("Mes Inicio", list(st.session_state.db['inpc'].keys()))
+        mes_f = st.selectbox("Mes Cierre", list(st.session_state.db['inpc'].keys()))
+        
+        if st.button("Calcular Reexpresión"):
+            reexpresado = calcular_ajuste_inflacion(val_h, mes_i, mes_f)
+            st.metric("Valor Reexpresado", f"Bs. {reexpresado:,.2f}", f"Incremento: {reexpresado-val_h:,.2f}")
 
-elif opcion == "Cierre y Ajuste IPC":
-    st.title("📈 Ajuste por Inflación Fiscal")
-    st.write("Tabla de INPC (Banco Central de Venezuela)")
-    inpc_data = pd.DataFrame({
-        "Mes": ["Enero", "Febrero", "Marzo"],
-        "INPC 2026": [1250.4, 1280.1, 1310.5],
-        "Factor Variación": [1.0, 1.023, 1.048]
-    })
-    st.table(inpc_data)
-    if st.button("Ejecutar Reexpresión de Estados Financieros"):
-        st.warning("Calculando Variación de IPC sobre Propiedad, Planta y Equipo...")
+    elif opcion == "Exportar SENIAT":
+        st.header("📤 Generación de Archivos Legales")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Formato TXT IVA")
+            ejemplo_txt = f"{rif_actual}|202605|09/05/2026|01|004126952|{formato_txt_seniat(7240.90)}|{formato_txt_seniat(1158.54)}"
+            st.code(ejemplo_txt, language="text")
+            st.download_button("Descargar TXT", ejemplo_txt)
+            
+        with col2:
+            st.subheader("Formato XML ISLR")
+            xml_tpl = f"""<RelacionRetencionesISLR RifAgente="{rif_actual}" Periodo="202605">
+<DetalleRetencion>
+    <RifRetenido>V12345678</RifRetenido>
+    <NumeroFactura>004126952</NumeroFactura>
+    <MontoOperacion>{formatear_seniat(7240.90)}</MontoOperacion>
+</DetalleRetencion>
+</RelacionRetencionesISLR>"""
+            st.code(xml_tpl, language="xml")
+
+if st.sidebar.button("Cerrar Sesión"):
+    del st.session_state.user
+    st.rerun()
