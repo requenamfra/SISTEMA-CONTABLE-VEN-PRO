@@ -21,11 +21,11 @@ def make_hashes(password):
 def check_hashes(password, hashed_text):
     return make_hashes(password) == hashed_text
 
-# --- INICIALIZACIÓN DE MEMORIA ---
+# --- 1. INICIALIZACIÓN DE MEMORIA (BASE DE DATOS) ---
 if 'db' not in st.session_state:
     st.session_state.db = {
         'usuarios': {'admin@omni.com': {'pass': make_hashes('admin123'), 'rol': 'ADMIN', 'rif': 'MASTER'}},
-        'empresas': {} # Aquí se guardarán los 10.000+ clientes
+        'empresas': {} # Aquí se guardarán todos tus clientes
     }
 # --- BASE DE DATOS LOCAL (SIMULADA) ---
 if 'db' not in st.session_state:
@@ -72,42 +72,44 @@ if st.session_state.rol == "ADMIN":
     tab1, tab2, tab3 = st.tabs(["📊 Listado de Clientes", "🏢 Registrar Nueva Empresa", "👤 Usuarios Adicionales"])
     
     with tab1:
-        st.subheader("📊 Control Maestro de Clientes")
+        st.subheader("📊 Control de Clientes y Pagos")
         if not st.session_state.db['empresas']:
-            st.info("No hay clientes registrados aún.")
+            st.info("Aún no has registrado empresas.")
         else:
-            for rif, info in st.session_state.db['empresas'].items():
-                col1, col2, col3, col4 = st.columns([2, 3, 2, 2])
-                with col1:
-                    st.write(f"**{rif}**")
-                with col2:
-                    st.write(info['nombre'])
-                with col3:
-                    color = "green" if info['estado'] == "Habilitado" else "red"
-                    st.markdown(f":{color}[{info['estado']}]")
-                with col4:
-                    # BOTÓN DE ACCIÓN (Habilitar/Deshabilitar)
-                    label = "🚫 Deshabilitar" if info['estado'] == "Habilitado" else "✅ Habilitar"
-                    if st.button(label, key=f"btn_{rif}"):
-                        nuevo_estado = "Deshabilitado" if info['estado'] == "Habilitado" else "Habilitado"
-                        st.session_state.db['empresas'][rif]['estado'] = nuevo_estado
-                        st.rerun()
-                st.divider()
+            # Encabezados de la tabla
+            h1, h2, h3, h4 = st.columns([2, 3, 2, 2])
+            h1.write("**RIF**")
+            h2.write("**Empresa**")
+            h3.write("**Estado**")
+            h4.write("**Acción**")
+            st.divider()
 
-    if st.form_submit_button("Dar de Alta Empresa y Cliente"):
-                # Esto guarda permanentemente en la sesión actual
-                st.session_state.db['empresas'][e_rif] = {
-                    'nombre': e_nom, 
-                    'vence': e_vence, 
-                    'estado': 'Habilitado'
-                }
-                st.session_state.db['usuarios'][e_mail] = {
-                    'pass': make_hashes(e_pass), 
-                    'rol': 'CLIENTE', 
-                    'rif': e_rif
-                }
-                st.success(f"✅ Registrada: {e_nom}")
-                st.rerun() # Esto hace que aparezca en la lista inmediatamente
+            for rif, info in st.session_state.db['empresas'].items():
+                c1, c2, c3, c4 = st.columns([2, 3, 2, 2])
+                c1.write(rif)
+                c2.write(info['nombre'])
+                
+                # Color según estado
+                color = "green" if info['estado'] == "Habilitado" else "red"
+                c3.markdown(f":{color}[{info['estado']}]")
+                
+                # BOTÓN DE CONTROL DE ACCESO
+                label = "🚫 Suspender" if info['estado'] == "Habilitado" else "✅ Activar"
+                if c4.button(label, key=f"pago_{rif}"):
+                    nuevo = "Deshabilitado" if info['estado'] == "Habilitado" else "Habilitado"
+                    st.session_state.db['empresas'][rif]['estado'] = nuevo
+                    st.rerun()
+               with tab2:
+        with st.form("registro_maestro"):
+            st.subheader("📝 Datos de la Nueva Entidad")
+            # ... (aquí van tus campos de RIF, Nombre, etc.) ...
+            
+            # EL BOTÓN DEBE ESTAR AQUÍ ADENTRO (Identado a la derecha)
+            if st.form_submit_button("Habilitar Empresa y Cliente"):
+                st.session_state.db['empresas'][e_rif] = {'nombre': e_nom, 'vence': e_vence, 'estado': 'Habilitado'}
+                st.session_state.db['usuarios'][e_mail] = {'pass': make_hashes(e_pass), 'rol': 'CLIENTE', 'rif': e_rif}
+                st.success(f"¡{e_nom} lista!")
+                st.rerun() # Esto actualiza la lista de inmediato
     with tab3:
         st.subheader("👤 Vincular Usuarios Extras a Empresa Existente")
         with st.form("registro_usuario_extra"):
