@@ -72,3 +72,5 @@ Desarrollar una plataforma SaaS multitenant para la gestión contable y fiscal d
         <PorcentajeRetencion>3,00</PorcentajeRetencion>
     </DetalleRetencion>
 </RelacionRetencionesISLR>
+
+📈 Ajuste por Inflación (Fórmula Crítica)$$Factor = \frac{INPC_{final}}{INPC_{inicial}}$$El sistema deberá cruzar esta fórmula con la tabla de valores que emita el BCV mensualmente
